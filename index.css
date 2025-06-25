@@ -6,15 +6,15 @@
     --shadow-color: #111;
 }
 body {
-    font-family: Arial, sans-serif;
+    font-family: sans-serif;
     background: var(--body-bg-color);
     color: var(--text-color);
-    margin: 1% auto;
+    margin: 0 auto;
     padding: 0;
 }
 .container {
     max-width: 800px;
-    margin: 0 auto;
+    margin: 1% auto;
 }
 .video-preview {
     width: 100%;
@@ -98,7 +98,7 @@ body {
     border-top: 8px solid #ff4444;
 }
 .start-marker, .end-marker {
-    width: 16px;
+    width: 15px;
     height: 50px;
     position: absolute;
     top: -5px;
@@ -290,23 +290,65 @@ body {
 #clip-list li {
     background-color: #222;
     padding: 10px;
-    margin-bottom: 5px;
+    margin-bottom: 10px;
     border-radius: 5px;
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column; /* Stack elements vertically */
+    gap: 8px; /* Space between elements */
+    cursor: move; /* Indicates draggable */
+}
+#clip-list li.dragging {
+    opacity: 0.5;
+    background-color: #333;
+}
+#clip-list li .clip-label {
+    cursor: text; /* Indicate editable text */
+    font-weight: bold;
+    font-size: 14px;
+    color: var(--highlight-color);
+    padding: 5px;
+    border-radius: 3px;
+    background-color: #333;
+    outline: none;
+}
+#clip-list li .clip-label:focus {
+    background-color: #444;
+    border: 1px solid var(--highlight-color);
+}
+#clip-list li .button-group {
+    display: flex;
+    gap: 6px; /* Space between buttons */
+    flex-wrap: wrap; /* Allow buttons to wrap if needed */
 }
 #clip-list li button {
+    min-width: 32px; /* Ensure icon buttons are uniform */
     background-color: maroon;
     border: red 1px solid;
     color: white;
-    padding: 5px 10px;
+    padding: 5px;
     border-radius: 3px;
     cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s;
 }
 #clip-list li button:hover {
     background-color: red;
 }
+#clip-list li .time-range {
+    font-size: 12px;
+    color: #aaa;
+    font-family: 'Courier New', monospace;
+
+}
+#clip-list li button:hover {
+    background-color: red;
+}
+#clip-list li .clip-label:empty::before {
+    content: 'Enter clip name';
+    color: #666;
+    font-style: italic;
+}
+
 /* Position the toggle button */
 #toggle-clip-list {
     position: fixed;
@@ -329,7 +371,7 @@ body {
 #toast-container {
     position: fixed;
     top: 20px;
-    right: 20px;
+    left: 20px;
     z-index: 1000;
 }
 .toast {

@@ -16,9 +16,17 @@ const startMarker = document.querySelector('.start-marker');
 const endMarker = document.querySelector('.end-marker');
 const selectedRange = document.querySelector('.selected-range');
 const exportRangeBtn = document.getElementById('export-range');
+const mergeClipsBtn = document.getElementById('merge-clips');
 const exportClipsBtn = document.getElementById('export-clips');
 const toggleClipListBtn = document.getElementById('toggle-clip-list');
 const clipListPanel = document.getElementById('clip-list-panel');
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'i') setStartBtn.click();
+    if (e.key === 'o') setEndBtn.click();
+    if (e.key === 'c') cutBtn.click();
+    if (e.key === 'm' && !mergeClipsBtn.disabled) mergeClipsBtn.click();
+});
 
 async function exportClips() {
     if (clips.length === 0) {
@@ -91,6 +99,38 @@ async function exportRange() {
 
 exportRangeBtn.addEventListener('click', exportRange);
 
+// Add mergeClips function and event listener
+async function mergeClips() {
+    if (clips.length === 0) {
+        showToast('No clips to merge');
+        return;
+    }
+    try {
+        const response = await fetch('http://localhost:3001/merge-clips', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                videoPath: currentVideoPath,
+                clips: clips.map(({ startTime, endTime, label }) => ({ startTime, endTime, label })),
+            }),
+        });
+        if (!response.ok) throw new Error('Failed to merge clips');
+        const { outputUrl } = await response.json();
+        const a = document.createElement('a');
+        a.href = `http://localhost:3001${outputUrl}`;
+        a.download = 'merged_video.mp4';
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        showToast('Merged clips successfully');
+    } catch (err) {
+        console.error('Error merging clips:', err);
+        showToast('Error merging clips');
+    }
+}
+
+mergeClipsBtn.addEventListener('click', mergeClips);
+
 let startTime = 0;
 let endTime = 0;
 let keyframes = [];
@@ -105,24 +145,24 @@ function formatTime(time) {
 }
 
 function createTimelineTicks() {
-if (!video.duration) return;
-timelineTicks.innerHTML = '';
-const duration = video.duration;
-const tickInterval = duration < 60 ? 5 : duration < 300 ? 30 : 60; // 5s, 30s, or 60s intervals
-const majorTickInterval = tickInterval * 4;
-for (let time = 0; time <= duration; time += tickInterval) {
-const tick = document.createElement('div');
-tick.className = time % majorTickInterval === 0 ? 'timeline-tick major' : 'timeline-tick';
-tick.style.left = `${(time / duration) * 100}%`;
-timelineTicks.appendChild(tick);
-if (time % majorTickInterval === 0) {
-const label = document.createElement('div');
-label.className = 'timeline-tick-label';
-label.style.left = `${(time / duration) * 100}%`;
-label.textContent = formatTime(time);
-timelineTicks.appendChild(label);
-}
-}
+    if (!video.duration) return;
+    timelineTicks.innerHTML = '';
+    const duration = video.duration;
+    const tickInterval = duration < 60 ? 5 : duration < 300 ? 30 : 60; // 5s, 30s, or 60s intervals
+    const majorTickInterval = tickInterval * 4;
+    for (let time = 0; time <= duration; time += tickInterval) {
+        const tick = document.createElement('div');
+        tick.className = time % majorTickInterval === 0 ? 'timeline-tick major' : 'timeline-tick';
+        tick.style.left = `${(time / duration) * 100}%`;
+        timelineTicks.appendChild(tick);
+        if (time % majorTickInterval === 0) {
+            const label = document.createElement('div');
+            label.className = 'timeline-tick-label';
+            label.style.left = `${(time / duration) * 100}%`;
+            label.textContent = formatTime(time);
+            timelineTicks.appendChild(label);
+        }
+    }
 }
 
 function updateTimeline() {
@@ -142,15 +182,24 @@ function updateTimeline() {
 }
 
 function updateSelectedRange() {
-  const startPosition = (startTime / video.duration) * 100;
-  const endPosition = (endTime / video.duration) * 100;
-  selectedRange.style.left = `${startPosition}%`;
-  selectedRange.style.width = `${endPosition - startPosition}%`;
-  startMarker.style.left = `${startPosition}%`;
-  endMarker.style.left = `${endPosition}%`;
-  // Update selection duration display
-  const selectionDuration = endTime - startTime;
-  document.getElementById('selection-duration').textContent = `Selection: ${formatTime(selectionDuration)}`;
+    if (isNaN(video.duration)) return; // Avoid NaN issues
+    // Clamp startTime and endTime
+    startTime = Math.max(0, Math.min(startTime, video.duration));
+    endTime = Math.max(startTime, Math.min(endTime, video.duration));
+    
+    const startPosition = (startTime / video.duration) * 100;
+    let endPosition = (endTime / video.duration) * 100;
+    // Ensure endPosition doesn't exceed 100% to prevent overflow
+    endPosition = Math.min(endPosition, 100);
+    
+    selectedRange.style.left = `${startPosition}%`;
+    selectedRange.style.width = `${endPosition - startPosition}%`;
+    startMarker.style.left = `${startPosition}%`;
+    endMarker.style.left = `${endPosition}%`;
+    
+    // Update selection duration display
+    const selectionDuration = endTime - startTime;
+    document.getElementById('selection-duration').textContent = `Selection: ${formatTime(selectionDuration)}`;
 }
 
 function updateClipHighlights() {
@@ -188,47 +237,117 @@ function addClip() {
         return;
     }
     const newClip = {
-        id: Date.now(), // Unique identifier
+        id: Date.now(),
         label: `Clip ${clips.length + 1}`,
         startTime: startTime,
-        endTime: endTime,
+        endTime: Math.min(endTime, video.duration), // Clamp endTime
     };
     clips.push(newClip);
     updateClipList();
     updateClipHighlights();
+    clipListPanel.style.display = 'block'; // Open side panel
     showToast(`Added clip: ${newClip.label}`);
 }
 
 function updateClipList() {
     const clipList = document.getElementById('clip-list');
     clipList.innerHTML = '';
-    clips.forEach((clip) => {
+    clips.forEach((clip, index) => {
         const li = document.createElement('li');
+        
+        // Add drag-and-drop functionality
+        li.draggable = true;
+        li.dataset.index = index;
+        li.ondragstart = (e) => {
+            e.dataTransfer.setData('text/plain', index);
+            li.classList.add('dragging');
+        };
+        li.ondragend = () => {
+            li.classList.remove('dragging');
+        };
+        li.ondragover = (e) => e.preventDefault();
+        li.ondrop = (e) => {
+            e.preventDefault();
+            const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+            const toIndex = parseInt(e.target.closest('li').dataset.index);
+            const [movedClip] = clips.splice(fromIndex, 1);
+            clips.splice(toIndex, 0, movedClip);
+            updateClipList();
+            updateClipHighlights();
+        };
+
+				// Clip ordering via arrow keys
+				li.tabIndex = 0; // Make li focusable
+				li.onkeydown = (e) => {
+						if (e.key === 'ArrowUp' && index > 0) {
+								const [movedClip] = clips.splice(index, 1);
+								clips.splice(index - 1, 0, movedClip);
+								updateClipList();
+								updateClipHighlights();
+								clipList.children[index - 1].focus();
+						} else if (e.key === 'ArrowDown' && index < clips.length - 1) {
+								const [movedClip] = clips.splice(index, 1);
+								clips.splice(index + 1, 0, movedClip);
+								updateClipList();
+								updateClipHighlights();
+								clipList.children[index + 1].focus();
+						}
+				};
+
         // Editable label
         const labelSpan = document.createElement('span');
         labelSpan.contentEditable = true;
         labelSpan.textContent = clip.label;
         labelSpan.className = 'clip-label';
         labelSpan.onblur = () => {
-            clip.label = labelSpan.textContent;
+            clip.label = labelSpan.textContent.trim() || `Clip ${clips.indexOf(clip) + 1}`; // Fallback if empty
         };
-        // Jump-to button
+
+        // Button group
+        const buttonGroup = document.createElement('div');
+        buttonGroup.className = 'button-group';
+
         const jumpBtn = document.createElement('button');
-        jumpBtn.textContent = 'Jump';
+				jumpBtn.innerHTML = '<i class="fas fa-play"></i>';
         jumpBtn.onclick = () => {
             video.currentTime = clip.startTime;
         };
-        // Delete button
+
+        const previewBtn = document.createElement('button');
+				previewBtn.innerHTML = '<i class="fas fa-eye"></i>';
+        previewBtn.onclick = () => {
+            video.currentTime = clip.startTime;
+            video.play();
+            const stopAtEnd = () => {
+                if (video.currentTime >= clip.endTime) {
+                    video.pause();
+                    video.removeEventListener('timeupdate', stopAtEnd);
+                }
+            };
+            video.addEventListener('timeupdate', stopAtEnd);
+        };
+
         const deleteBtn = document.createElement('button');
-        deleteBtn.textContent = 'Delete';
+				deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
         deleteBtn.onclick = () => deleteClip(clip.id);
+
+        buttonGroup.appendChild(jumpBtn);
+        buttonGroup.appendChild(previewBtn);
+        buttonGroup.appendChild(deleteBtn);
+
+        // Time range
+        const timeRange = document.createElement('div');
+        timeRange.className = 'time-range';
+        timeRange.textContent = `${formatTime(clip.startTime)} - ${formatTime(clip.endTime)}`;
+
+        // Append elements in order: Title, Buttons, Time Range
         li.appendChild(labelSpan);
-        li.appendChild(document.createTextNode(`: ${formatTime(clip.startTime)} - ${formatTime(clip.endTime)}`));
-        li.appendChild(jumpBtn);
-        li.appendChild(deleteBtn);
+        li.appendChild(buttonGroup);
+        li.appendChild(timeRange);
         clipList.appendChild(li);
     });
     exportClipsBtn.disabled = clips.length === 0;
+    mergeClipsBtn.disabled = clips.length < 2;
 }
 
 function deleteClip(id) {
@@ -273,49 +392,50 @@ openBtn.addEventListener('click', () => {
 });
 
 fileInput.addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (file) {
-    const formData = new FormData();
-    formData.append('video', file);
-    try {
-      const response = await fetch('http://localhost:3001/upload-video', {
-        method: 'POST',
-        body: formData,
-      });
-      if (!response.ok) {
-        throw new Error('Failed to upload video');
-      }
-      const { filename, path } = await response.json();
-      currentVideoPath = path;
-      const videoURL = URL.createObjectURL(file);
-      video.src = videoURL;
+    const file = e.target.files[0];
+    if (file) {
+        const formData = new FormData();
+        formData.append('video', file);
+        try {
+            const response = await fetch('http://localhost:3001/upload-video', {
+                method: 'POST',
+                body: formData,
+            });
+            if (!response.ok) {
+                throw new Error('Failed to upload video');
+            }
+            const { filename, path } = await response.json();
+            currentVideoPath = path;
+            const videoURL = URL.createObjectURL(file);
+            video.src = videoURL;
 
-      showToast('Scanning frames...', 5000);
-      const keyframeResponse = await fetch('http://localhost:3001/get-keyframes', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoPath: path }),
-      });
-      if (!keyframeResponse.ok) {
-        const errorData = await keyframeResponse.json();
-        throw new Error(errorData.error || 'Error fetching keyframes');
-      }
-      keyframes = await keyframeResponse.json();
-      console.log('Keyframes:', keyframes);
-      clips = [];
-      updateClipList();
-      updateClipHighlights();
-      cutBtn.disabled = false;
-      exportClipsBtn.disabled = true;
-      playPauseBtn.disabled = false;
-      prevKeyframeBtn.disabled = keyframes.length === 0;
-      nextKeyframeBtn.disabled = keyframes.length === 0;
-      showToast(`Loaded ${keyframes.length} keyframes`);
-    } catch (err) {
-      console.error('Error uploading video:', err);
-      showToast(err.message || 'Error uploading video');
+            showToast('Scanning frames...', 5000);
+            const keyframeResponse = await fetch('http://localhost:3001/get-keyframes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ videoPath: path }),
+            });
+            if (!keyframeResponse.ok) {
+                const errorData = await keyframeResponse.json();
+                throw new Error(errorData.error || 'Error fetching keyframes');
+            }
+            keyframes = await keyframeResponse.json();
+            console.log('Keyframes:', keyframes);
+            clips = [];
+            updateClipList();
+            updateClipHighlights();
+            cutBtn.disabled = false;
+            exportClipsBtn.disabled = true;
+            mergeClipsBtn.disabled = true; // Disable initially
+            playPauseBtn.disabled = false;
+            prevKeyframeBtn.disabled = keyframes.length === 0;
+            nextKeyframeBtn.disabled = keyframes.length === 0;
+            showToast(`Loaded ${keyframes.length} keyframes`);
+        } catch (err) {
+            console.error('Error uploading video:', err);
+            showToast(err.message || 'Error uploading video');
+        }
     }
-  }
 });
 
 playPauseBtn.addEventListener('click', () => {
@@ -332,22 +452,26 @@ playPauseBtn.addEventListener('click', () => {
 });
 
 closeBtn.addEventListener('click', () => {
-  if (video.src) {
-    URL.revokeObjectURL(video.src);
-  }
-  video.src = '';
-  currentVideoPath = '';
-  keyframes = [];
-  clips = [];
-  updateClipList();
-  updateClipHighlights();
-  cutBtn.disabled = true;
-  exportClipsBtn.disabled = true;
-  playPauseBtn.disabled = true;
-  const playPauseIcon = document.getElementById('play-pause-icon');
-  playPauseIcon.classList.remove('fa-pause');
-  playPauseIcon.classList.add('fa-play');
-  fileInput.value = '';
+    if (video.src) {
+        URL.revokeObjectURL(video.src);
+    }
+    video.src = '';
+    currentVideoPath = '';
+    keyframes = [];
+    clips = [];
+    startTime = 0;
+    endTime = 0;
+    updateClipList();
+    updateClipHighlights();
+    updateSelectedRange();
+    cutBtn.disabled = true;
+    exportClipsBtn.disabled = true;
+    mergeClipsBtn.disabled = true;
+    playPauseBtn.disabled = true;
+    const playPauseIcon = document.getElementById('play-pause-icon');
+    playPauseIcon.classList.remove('fa-pause');
+    playPauseIcon.classList.add('fa-play');
+    fileInput.value = '';
 });
 
 stopBtn.addEventListener('click', () => {

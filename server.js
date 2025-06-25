@@ -183,6 +183,77 @@ app.post('/export-zip', async (req, res) => {
   }
 });
 
+// Merge clips endpoint
+app.post('/merge-clips', async (req, res) => {
+    const { videoPath, clips } = req.body;
+    if (!videoPath || !Array.isArray(clips) || clips.length < 2) {
+        return res.status(400).json({ error: 'At least two clips and videoPath required' });
+    }
+
+    const tempDir = path.join(__dirname, 'outputs', `temp-merge-${Date.now()}`);
+    const outputFile = path.join(__dirname, 'outputs', `merged-${Date.now()}.mp4`);
+    const concatListPath = path.join(tempDir, 'concat_list.txt');
+
+    try {
+        // Create temporary directory
+        await fs.mkdir(tempDir, { recursive: true });
+
+        // Generate individual clips
+        const clipFiles = [];
+        for (const [index, clip] of clips.entries()) {
+            if (clip.startTime == null || clip.endTime == null || clip.startTime >= clip.endTime) {
+                console.warn(`Invalid clip ${index}:`, clip);
+                continue;
+            }
+            const clipFile = path.join(tempDir, `clip-${index}.mp4`);
+            await new Promise((resolve, reject) => {
+                ffmpeg(videoPath)
+                    .setStartTime(clip.startTime)
+                    .setDuration(clip.endTime - clip.startTime)
+                    .outputOptions('-c:v copy')
+                    .outputOptions('-c:a copy')
+                    .output(clipFile)
+                    .on('end', resolve)
+                    .on('error', reject)
+                    .run();
+            });
+            clipFiles.push(clipFile);
+        }
+
+        // Create concat list file
+        const concatListContent = clipFiles.map(file => `file '${file}'`).join('\n');
+        await fs.writeFile(concatListPath, concatListContent);
+
+        // Concatenate clips
+        await new Promise((resolve, reject) => {
+            ffmpeg()
+                .input(concatListPath)
+                .inputOptions('-f concat')
+                .inputOptions('-safe 0')
+                .outputOptions('-c copy')
+                .output(outputFile)
+                .on('end', resolve)
+                .on('error', reject)
+                .run();
+        });
+
+        const outputUrl = `/outputs/${path.basename(outputFile)}`;
+        res.json({ outputUrl });
+
+        // Clean up temporary files
+        for (const clipFile of clipFiles) {
+            await fs.unlink(clipFile).catch(() => {});
+        }
+        await fs.unlink(concatListPath).catch(() => {});
+        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    } catch (err) {
+        console.error('Error merging clips:', err);
+        res.status(500).json({ error: 'Error merging clips', details: err.message });
+        // Clean up on error
+        await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
+});
+
 app.listen(port, () => {
   console.log(`Server running at http://localhost:${port}`);
 });
