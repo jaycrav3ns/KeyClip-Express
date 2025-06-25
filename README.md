@@ -10,7 +10,7 @@ Powered by a local Node.js/Express/FFmpeg backend.
 - **Visual Timeline**: Select start/end points, drag handles, and view all keyframes.
 - **Multiple Clips**: Mark and label as many clips as you want before exporting.
 - **Clip List Panel**: Organize, jump to, and rename your clips.
-- **Batch Export**: Download all clips at once as a ZIP file, processed losslessly via FFmpeg.
+- **Batch Export**: Download all clips at once as a ZIP file, processed via FFmpeg.
 - **Keyframe Navigation**: Jump to previous/next keyframe for perfect cuts.
 - **Modern UI**: Clean, dark-themed interface with intuitive controls.
 
@@ -59,7 +59,7 @@ The app will be available at [http://localhost:3001](http://localhost:3001).
 ## Why KeyClip-Express?
 
 - **No Uploads:** Your videos never leave your computer—processing is local.
-- **Super Fast:** Powered by lossless FFmpeg segmenting.
+- **Super Fast:** Powered FFmpeg. Keyframe segmenting enables direct stream copying.
 - **Batch Workflow:** Prepare all your clips first, then export in one go.
 - **Modern Experience:** Clean UI, keyboard shortcuts (coming soon!), and a focus on usability.
 
