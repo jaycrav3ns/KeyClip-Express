@@ -18,9 +18,9 @@ Powered by a local Node.js/Express/FFmpeg backend.
 
 ## Screenshots
 
-![keyclip-express1](https://github.com/user-attachments/assets/e528c151-3e8b-4768-9165-8742adbffa15)
+![ss1 png](https://github.com/user-attachments/assets/e51c5c88-6588-4401-93f4-ffee859a6cf2)
 
-![Untitled](https://github.com/user-attachments/assets/e4fc4901-b160-4aa9-b06d-d99b426c8d4b)
+![ss2png](https://github.com/user-attachments/assets/c9a19176-cb74-4044-8077-30eccd84db51)
 
 ---
 
