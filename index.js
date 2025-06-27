@@ -276,23 +276,23 @@ function updateClipList() {
             updateClipHighlights();
         };
 
-				// Clip ordering via arrow keys
-				li.tabIndex = 0; // Make li focusable
-				li.onkeydown = (e) => {
-						if (e.key === 'ArrowUp' && index > 0) {
-								const [movedClip] = clips.splice(index, 1);
-								clips.splice(index - 1, 0, movedClip);
-								updateClipList();
-								updateClipHighlights();
-								clipList.children[index - 1].focus();
-						} else if (e.key === 'ArrowDown' && index < clips.length - 1) {
-								const [movedClip] = clips.splice(index, 1);
-								clips.splice(index + 1, 0, movedClip);
-								updateClipList();
-								updateClipHighlights();
-								clipList.children[index + 1].focus();
-						}
-				};
+        // Clip ordering via arrow keys
+        li.tabIndex = 0; // Make li focusable
+        li.onkeydown = (e) => {
+            if (e.key === 'ArrowUp' && index > 0) {
+                const [movedClip] = clips.splice(index, 1);
+                clips.splice(index - 1, 0, movedClip);
+                updateClipList();
+                updateClipHighlights();
+                clipList.children[index - 1].focus();
+            } else if (e.key === 'ArrowDown' && index < clips.length - 1) {
+                const [movedClip] = clips.splice(index, 1);
+                clips.splice(index + 1, 0, movedClip);
+                updateClipList();
+                updateClipHighlights();
+                clipList.children[index + 1].focus();
+            }
+        };
 
         // Editable label
         const labelSpan = document.createElement('span');
@@ -308,13 +308,13 @@ function updateClipList() {
         buttonGroup.className = 'button-group';
 
         const jumpBtn = document.createElement('button');
-				jumpBtn.innerHTML = '<i class="fas fa-play"></i>';
+        jumpBtn.innerHTML = '<i class="fas fa-play"></i>';
         jumpBtn.onclick = () => {
             video.currentTime = clip.startTime;
         };
 
         const previewBtn = document.createElement('button');
-				previewBtn.innerHTML = '<i class="fas fa-eye"></i>';
+        previewBtn.innerHTML = '<i class="fas fa-eye"></i>';
         previewBtn.onclick = () => {
             video.currentTime = clip.startTime;
             video.play();
@@ -328,7 +328,7 @@ function updateClipList() {
         };
 
         const deleteBtn = document.createElement('button');
-				deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
+        deleteBtn.innerHTML = '<i class="fas fa-trash"></i>';
         deleteBtn.onclick = () => deleteClip(clip.id);
 
         buttonGroup.appendChild(jumpBtn);
@@ -483,14 +483,52 @@ stopBtn.addEventListener('click', () => {
 });
 
 setStartBtn.addEventListener('click', () => {
-  startTime = video.currentTime;
+  const closestKeyframe = findClosestKeyframe(video.currentTime, 'backward');
+  startTime = closestKeyframe ? closestKeyframe.ptsTime : video.currentTime; // Fallback to current time if no keyframe found
   updateSelectedRange();
 });
 
 setEndBtn.addEventListener('click', () => {
-  endTime = video.currentTime;
+  const closestKeyframe = findClosestKeyframe(video.currentTime, 'forward');
+  endTime = closestKeyframe ? closestKeyframe.ptsTime : video.currentTime; // Fallback to current time if no keyframe found
   updateSelectedRange();
 });
+
+function findClosestKeyframe(currentTime, direction = 'forward') {
+  if (keyframes.length === 0) return null;
+
+  if (direction === 'forward') {
+    const nextKeyframe = keyframes
+      .filter((kf) => kf.ptsTime >= currentTime) // Changed > to >=
+      .sort((a, b) => a.ptsTime - b.ptsTime)[0];
+    return nextKeyframe || keyframes[keyframes.length - 1]; // Return last keyframe if none are ahead
+  } else {
+    const prevKeyframe = keyframes
+      .filter((kf) => kf.ptsTime <= currentTime) // Changed < to <=
+      .sort((a, b) => b.ptsTime - a.ptsTime)[0];
+    return prevKeyframe || keyframes[0]; // Return first keyframe if none are behind
+  }
+}
+
+function drag(e) {
+  if (!isDragging) return;
+  const rect = timeline.getBoundingClientRect();
+  const position = (e.clientX - rect.left) / rect.width;
+  let time = position * video.duration;
+  time = Math.max(0, Math.min(time, video.duration));
+
+  if (dragTarget === startMarker) {
+    const closestKeyframe = findClosestKeyframe(time, 'backward');
+    startTime = closestKeyframe ? closestKeyframe.ptsTime : time;
+    startTime = Math.min(startTime, endTime); // Ensure start time is not greater than end time
+  } else if (dragTarget === endMarker) {
+    const closestKeyframe = findClosestKeyframe(time, 'forward');
+    endTime = closestKeyframe ? closestKeyframe.ptsTime : time;
+    endTime = Math.max(time, startTime); // Ensure end time is not less than start time
+  }
+
+  updateSelectedRange();
+}
 
 let isDragging = false;
 let dragTarget = null;
@@ -503,21 +541,6 @@ function startDrag(e) {
 function stopDrag() {
   isDragging = false;
   dragTarget = null;
-}
-
-function drag(e) {
-  if (!isDragging) return;
-  const rect = timeline.getBoundingClientRect();
-  const position = (e.clientX - rect.left) / rect.width;
-  let time = position * video.duration;
-    // Clamp the time value
-    time = Math.max(0, Math.min(time, video.duration));
-  if (dragTarget === startMarker) {
-    startTime = Math.min(time, endTime);
-  } else if (dragTarget === endMarker) {
-    endTime = Math.max(time, startTime);
-  }
-  updateSelectedRange();
 }
 
 let throttleTimeout;
